@@ -1,4 +1,4 @@
-## 📅 Calendar Feature
+# Calendar Feature
 
 - View festivals and user events
 - Tap a date to view events
