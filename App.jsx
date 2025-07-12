@@ -10,10 +10,13 @@ import {
   TextInput,
   Alert,
   Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Geolocation from 'react-native-geolocation-service';
+import { MhahPanchang } from 'mhah-panchang';
 
 // Sample Hindu festival data
 const hinduFestivals = [
@@ -22,9 +25,18 @@ const hinduFestivals = [
 ];
 
 const STORAGE_KEY = 'USER_EVENTS';
+const delhiLocation = { latitude: 28.6139, longitude: 77.2090, altitude: 216 };
+
+const isValidLocation = loc =>
+  loc &&
+  typeof loc.latitude === 'number' &&
+  typeof loc.longitude === 'number' &&
+  !isNaN(loc.latitude) &&
+  !isNaN(loc.longitude) &&
+  Math.abs(loc.latitude) <= 90 &&
+  Math.abs(loc.longitude) <= 180;
 
 const App = () => {
-  // State for user events
   const [events, setEvents] = useState([
     { id: '1', date: '2025-07-01', title: 'dinner with family', time: '19:00' },
     { id: '2', date: '2025-07-07', title: 'college start', time: '09:00' },
@@ -32,14 +44,11 @@ const App = () => {
     { id: '4', date: '2025-07-02', title: 'my birthday', time: '00:00' },
   ]);
 
-  // Load events from AsyncStorage on mount
   useEffect(() => {
     const loadEvents = async () => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          setEvents(JSON.parse(stored));
-        }
+        if (stored) setEvents(JSON.parse(stored));
       } catch (e) {
         console.log('Failed to load events:', e);
       }
@@ -47,32 +56,92 @@ const App = () => {
     loadEvents();
   }, []);
 
-  // Save events to AsyncStorage whenever they change
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(e =>
       console.log('Failed to save events:', e)
     );
   }, [events]);
 
-  // Combine user events and Hindu festivals
   const allEvents = useMemo(() => [...events, ...hinduFestivals], [events]);
-
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   );
+  const [location, setLocation] = useState({ latitude: null, longitude: null, altitude: 0 });
+  const [locationError, setLocationError] = useState(null);
+  const [usingDefaultLocation, setUsingDefaultLocation] = useState(false);
 
-  // Modal state
+  useEffect(() => {
+    const requestLocation = async () => {
+      try {
+        if (Platform.OS === 'android') {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          );
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            setLocationError('Location permission denied');
+            setUsingDefaultLocation(true);
+            return;
+          }
+        }
+        Geolocation.getCurrentPosition(
+          (pos) => {
+            setLocation({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              altitude: pos.coords.altitude || 0,
+            });
+            setLocationError(null);
+            setUsingDefaultLocation(false);
+          },
+          (error) => {
+            setLocationError(error.message);
+            setUsingDefaultLocation(true);
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        );
+      } catch (err) {
+        setLocationError('Failed to get location');
+        setUsingDefaultLocation(true);
+      }
+    };
+    requestLocation();
+  }, []);
+
+  const [panchang, setPanchang] = useState(null);
+  const [panchangLoading, setPanchangLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchPanchang = () => {
+      const effectiveLocation = isValidLocation(location) ? location : delhiLocation;
+      setUsingDefaultLocation(!isValidLocation(location));
+      setPanchangLoading(true);
+      try {
+        const obj = new MhahPanchang();
+        const dateObj = new Date(selectedDate);
+        const result = obj.calendar(
+          dateObj,
+          effectiveLocation.latitude,
+          effectiveLocation.longitude
+        );
+        setPanchang(result);
+      } catch (e) {
+        setPanchang(null);
+        console.error('Panchang calculation error:', e);
+        Alert.alert('Error', 'Failed to calculate Panchang');
+      }
+      setPanchangLoading(false);
+    };
+    fetchPanchang();
+  }, [location, selectedDate]);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
-  const [eventTime, setEventTime] = useState(''); // New state for time
-
-  // Date & Time Picker state
+  const [eventTime, setEventTime] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Prepare marked dates for calendar
   const markedDates = useMemo(() => {
     const marks = {};
     allEvents.forEach(event => {
@@ -81,7 +150,6 @@ const App = () => {
     marks[selectedDate] = { ...marks[selectedDate], selected: true, selectedColor: '#00adf5' };
     return marks;
   }, [allEvents, selectedDate]);
-
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const selectedDateEvents = useMemo(
     () => allEvents.filter(event => event.date === selectedDate),
@@ -92,7 +160,6 @@ const App = () => {
     [allEvents, selectedDate]
   );
 
-  // Open modal for adding new event
   const openAddEventModal = useCallback(() => {
     setEditingEvent(null);
     setEventTitle('');
@@ -100,8 +167,6 @@ const App = () => {
     setEventTime('12:00');
     setModalVisible(true);
   }, [selectedDate]);
-
-  // Open modal for editing existing event
   const openEditEventModal = useCallback((event) => {
     setEditingEvent(event);
     setEventTitle(event.title);
@@ -109,8 +174,6 @@ const App = () => {
     setEventTime(event.time || '12:00');
     setModalVisible(true);
   }, []);
-
-  // Save event (add or update)
   const saveEvent = useCallback(() => {
     if (!eventTitle.trim()) {
       Alert.alert('Error', 'Please enter an event title');
@@ -124,7 +187,6 @@ const App = () => {
       Alert.alert('Error', 'Time must be in HH:MM format');
       return;
     }
-    
     if (editingEvent) {
       setEvents(prevEvents =>
         prevEvents.map(event =>
@@ -142,15 +204,12 @@ const App = () => {
       };
       setEvents(prevEvents => [...prevEvents, newEvent]);
     }
-    
     setModalVisible(false);
     setEventTitle('');
     setEventDate('');
     setEventTime('');
     setEditingEvent(null);
   }, [eventTitle, eventDate, eventTime, editingEvent]);
-
-  // Delete event
   const deleteEvent = useCallback((eventId) => {
     Alert.alert(
       'Delete Event',
@@ -167,8 +226,6 @@ const App = () => {
       ]
     );
   }, []);
-
-  // Memoized event item component
   const EventItem = React.memo(({ event, onEdit, onDelete }) => (
     <View style={styles.eventItem}>
       <View>
@@ -192,8 +249,6 @@ const App = () => {
       </View>
     </View>
   ));
-
-  // Handle date picker change
   const onDateChange = (event, selected) => {
     setShowDatePicker(false);
     if (selected) {
@@ -201,8 +256,6 @@ const App = () => {
       setEventDate(iso);
     }
   };
-
-  // Handle time picker change
   const onTimeChange = (event, selected) => {
     setShowTimePicker(false);
     if (selected) {
@@ -223,6 +276,35 @@ const App = () => {
           />
         </View>
 
+        {/* Panchang Box */}
+        <View style={styles.box}>
+          <Text style={styles.boxTitle}>Panchang for {selectedDate}</Text>
+          {usingDefaultLocation && (
+            <Text style={{ color: '#b36b00', marginBottom: 4 }}>
+              Using default location: Delhi
+            </Text>
+          )}
+          {locationError && !usingDefaultLocation && (
+            <Text style={{ color: 'red' }}>Location error: {locationError}</Text>
+          )}
+          {panchangLoading ? (
+            <Text>Loading Panchang...</Text>
+          ) : panchang ? (
+            <>
+              <Text>Tithi: {panchang.Tithi?.name_en_IN}</Text>
+              <Text>Paksha: {panchang.Paksha?.name_en_IN}</Text>
+              <Text>Nakshatra: {panchang.Nakshatra?.name_en_IN}</Text>
+              <Text>Yoga: {panchang.Yoga?.name_en_IN}</Text>
+              <Text>Karna: {panchang.Karna?.name_en_IN}</Text>
+              <Text>Masa: {panchang.Masa?.name_en_UK}</Text>
+              <Text>Raasi: {panchang.Raasi?.name_en_UK}</Text>
+              <Text>Ritu: {panchang.Ritu?.name_en_UK}</Text>
+            </>
+          ) : (
+            <Text>No Panchang data available.</Text>
+          )}
+        </View>
+
         {/* Today's Events Box */}
         <View style={styles.box}>
           <View style={styles.boxHeader}>
@@ -236,7 +318,6 @@ const App = () => {
               <Text style={styles.addButtonText}>+ Add</Text>
             </TouchableOpacity>
           </View>
-          
           {selectedDateEvents.length === 0 ? (
             <Text style={styles.noEventText}>No events for this day.</Text>
           ) : (
@@ -254,7 +335,6 @@ const App = () => {
         {/* Upcoming Events Box */}
         <View style={styles.box}>
           <Text style={styles.boxTitle}>Upcoming Events</Text>
-          
           {upcomingEvents.length === 0 ? (
             <Text style={styles.noEventText}>No upcoming events.</Text>
           ) : (
@@ -282,7 +362,6 @@ const App = () => {
             <Text style={styles.modalTitle}>
               {editingEvent ? 'Edit Event' : 'Add New Event'}
             </Text>
-            
             <Text style={styles.inputLabel}>Event Title</Text>
             <TextInput
               style={styles.textInput}
@@ -291,7 +370,6 @@ const App = () => {
               placeholder="Enter event title"
               placeholderTextColor="#999"
             />
-            
             <Text style={styles.inputLabel}>Date</Text>
             <TouchableOpacity
               style={styles.textInput}
@@ -309,7 +387,6 @@ const App = () => {
                 onChange={onDateChange}
               />
             )}
-
             <Text style={styles.inputLabel}>Time</Text>
             <TouchableOpacity
               style={styles.textInput}
@@ -332,7 +409,6 @@ const App = () => {
                 is24Hour={true}
               />
             )}
-
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -340,7 +416,6 @@ const App = () => {
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
               <TouchableOpacity 
                 style={styles.saveButton} 
                 onPress={saveEvent}
@@ -358,10 +433,7 @@ const App = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#f5f5f5' 
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   box: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -375,22 +447,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  boxTitle: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#333' 
-  },
+  boxTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   addButton: {
     backgroundColor: '#00adf5',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
-  addButtonText: { 
-    color: 'white', 
-    fontWeight: 'bold', 
-    fontSize: 14 
-  },
+  addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
   eventItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -399,42 +463,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  eventText: { 
-    fontSize: 16, 
-    color: '#333', 
-    flex: 1 
-  },
-  eventDate: { 
-    fontSize: 14, 
-    color: '#666', 
-    marginTop: 2 
-  },
-  eventActions: { 
-    flexDirection: 'row', 
-    gap: 8 
-  },
+  eventText: { fontSize: 16, color: '#333', flex: 1 },
+  eventDate: { fontSize: 14, color: '#666', marginTop: 2 },
+  eventActions: { flexDirection: 'row', gap: 8 },
   editButton: {
     backgroundColor: '#50cebb',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
   },
-  editButtonText: { 
-    color: 'white', 
-    fontSize: 12, 
-    fontWeight: 'bold' 
-  },
+  editButtonText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
   deleteButton: {
     backgroundColor: '#ff6b6b',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
   },
-  deleteButtonText: { 
-    color: 'white', 
-    fontSize: 12, 
-    fontWeight: 'bold' 
-  },
+  deleteButtonText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
   noEventText: {
     fontSize: 16,
     fontStyle: 'italic',
@@ -462,12 +507,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#333',
   },
-  inputLabel: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    marginBottom: 8, 
-    color: '#333' 
-  },
+  inputLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#333' },
   textInput: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -489,11 +529,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  cancelButtonText: { 
-    color: '#666', 
-    fontWeight: 'bold', 
-    fontSize: 16 
-  },
+  cancelButtonText: { color: '#666', fontWeight: 'bold', fontSize: 16 },
   saveButton: {
     flex: 1,
     backgroundColor: '#00adf5',
@@ -501,11 +537,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  saveButtonText: { 
-    color: 'white', 
-    fontWeight: 'bold', 
-    fontSize: 16 
-  },
+  saveButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 });
 
 export default App;
