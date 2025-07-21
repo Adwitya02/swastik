@@ -17,24 +17,92 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Geolocation from 'react-native-geolocation-service';
 import { MhahPanchang } from 'mhah-panchang';
+import moment from 'moment';
 
-// Sample Hindu festival data
-const hinduFestivals = [
-  { id: 'h1', date: '2025-10-23', title: 'Diwali', description: 'Festival of Lights' },
-  { id: 'h2', date: '2025-03-14', title: 'Holi', description: 'Festival of Colors' },
+// Major Festivals (static)
+const majorFestivalsStatic = [
+  { id: 'f1', name: "Diwali", date: "2025-10-20", description: "Festival of Lights" },
+  { id: 'f2', name: "Holi", date: "2025-03-14", description: "Festival of Colors" },
+  { id: 'f3', name: "Makar Sankranti", date: "2025-01-14", description: "Sun enters Capricorn" }
 ];
+
+// Regional Festivals (static, example with Kerala; adapt for dynamic region use)
+const regionalFestivals = {
+  "Kerala": [
+    { id: 'r1', name: "Onam", date: "2025-09-05", description: "Harvest festival" },
+    { id: 'r2', name: "Vishu", date: "2025-04-15", description: "Malayali New Year" }
+  ]
+};
+const userRegion = "Kerala"; // Replace with user picker or location-based mapping
+
+// Cultural Observances: dated for 2025 (example dates)
+const culturalObservances = [
+  { name: "Guru Purnima", date: "2025-07-11", description: "Honoring teachers and gurus." },
+  { name: "Raksha Bandhan", date: "2025-08-09", description: "Celebrates the bond between siblings." },
+  { name: "Karva Chauth", date: "2025-10-29", description: "Married women fast for husbands' well-being." },
+  { name: "Vat Purnima", date: "2025-06-10", description: "Fast and ritual for husbands' health." },
+  { name: "Akshaya Tritiya", date: "2025-04-30", description: "Auspicious day for new beginnings." },
+  { name: "Navaratri", date: "2025-09-22", description: "Nine-night festival for Goddess Durga." },
+  { name: "Janmashtami", date: "2025-08-16", description: "Birth of Lord Krishna." },
+  { name: "Maha Shivaratri", date: "2025-02-25", description: "Night for Lord Shiva worship." },
+  { name: "Ram Navami", date: "2025-04-06", description: "Birth of Lord Rama." },
+  { name: "Ganesh Chaturthi", date: "2025-08-28", description: "Birth of Lord Ganesha." },
+  { name: "Hanuman Jayanti", date: "2025-04-11", description: "Birth of Lord Hanuman." },
+  { name: "Makar Sankranti / Pongal", date: "2025-01-14", description: "Harvest festival; Pongal in South." },
+  { name: "Vasant Panchami", date: "2025-01-29", description: "Start of spring; Saraswati Puja." },
+  { name: "Mahavir Jayanti", date: "2025-04-10", description: "Birthday of Lord Mahavira." }
+];
+
+// Fasting Day Rules
+const FASTING_DAYS = [
+  {
+    name: 'Ekadashi',
+    color: '#47B881',
+    matcher: p => p.Tithi?.name?.includes('Ekadashi')
+  },
+  {
+    name: 'Pradosh',
+    color: '#FF8700',
+    matcher: p => p.Tithi?.name?.includes('Trayodashi')
+  },
+  {
+    name: 'Shivratri',
+    color: '#6B47DC',
+    matcher: p => p.Tithi?.name?.includes('Chaturdashi') && p.Masa === 'Magha' && p.Paksha === 'Krishna'
+  }
+];
+
+// Utility: fasting day marking calculation
+async function getFastingMarkings(year, month, lat, lon) {
+  const panchang = new MhahPanchang();
+  const days = moment({ year, month }).daysInMonth();
+  const markings = {};
+  for (let d = 1; d <= days; d++) {
+    const date = moment({ year, month, day: d }).toDate();
+    const pan = panchang.calendar(date, lat, lon);
+    FASTING_DAYS.forEach(rule => {
+      if (rule.matcher(pan)) {
+        const ds = moment(date).format('YYYY-MM-DD');
+        if (!markings[ds])
+          markings[ds] = { marked: true, dots: [{ color: rule.color }], fasts: [rule.name] };
+        else {
+          markings[ds].dots = markings[ds].dots || [];
+          markings[ds].fasts = markings[ds].fasts || [];
+          markings[ds].dots.push({ color: rule.color });
+          markings[ds].fasts.push(rule.name);
+        }
+      }
+    });
+  }
+  return markings;
+}
 
 const STORAGE_KEY = 'USER_EVENTS';
 const delhiLocation = { latitude: 28.6139, longitude: 77.2090, altitude: 216 };
-
 const isValidLocation = loc =>
-  loc &&
-  typeof loc.latitude === 'number' &&
-  typeof loc.longitude === 'number' &&
-  !isNaN(loc.latitude) &&
-  !isNaN(loc.longitude) &&
-  Math.abs(loc.latitude) <= 90 &&
-  Math.abs(loc.longitude) <= 180;
+  loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number' &&
+  !isNaN(loc.latitude) && !isNaN(loc.longitude) &&
+  Math.abs(loc.latitude) <= 90 && Math.abs(loc.longitude) <= 180;
 
 const App = () => {
   const [events, setEvents] = useState([
@@ -43,33 +111,15 @@ const App = () => {
     { id: '3', date: '2025-07-30', title: 'Project deadline', time: '23:59' },
     { id: '4', date: '2025-07-02', title: 'my birthday', time: '00:00' },
   ]);
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) setEvents(JSON.parse(stored));
-      } catch (e) {
-        console.log('Failed to load events:', e);
-      }
-    };
-    loadEvents();
-  }, []);
-
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(e =>
-      console.log('Failed to save events:', e)
-    );
-  }, [events]);
-
-  const allEvents = useMemo(() => [...events, ...hinduFestivals], [events]);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [location, setLocation] = useState({ latitude: null, longitude: null, altitude: 0 });
   const [locationError, setLocationError] = useState(null);
   const [usingDefaultLocation, setUsingDefaultLocation] = useState(false);
+  const [fastingMarks, setFastingMarks] = useState({});
+  const [panchang, setPanchang] = useState(null);
+  const [panchangLoading, setPanchangLoading] = useState(false);
 
+  // Location fetch
   useEffect(() => {
     const requestLocation = async () => {
       try {
@@ -107,8 +157,51 @@ const App = () => {
     requestLocation();
   }, []);
 
-  const [panchang, setPanchang] = useState(null);
-  const [panchangLoading, setPanchangLoading] = useState(false);
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) setEvents(JSON.parse(stored));
+      } catch (e) {
+        console.log('Failed to load events:', e);
+      }
+    };
+    loadEvents();
+  }, []);
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(e =>
+      console.log('Failed to save events:', e)
+    );
+  }, [events]);
+
+  // Merge all events (user + major + regional)
+  const allEvents = useMemo(() => [
+    ...events,
+    ...majorFestivalsStatic.map(f => ({
+      id: f.id,
+      date: f.date,
+      title: f.name,
+      description: f.description
+    })),
+    ...(regionalFestivals[userRegion] || [])
+  ], [events]);
+
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const selectedDateEvents = useMemo(
+    () => allEvents.filter(event => event.date === selectedDate),
+    [allEvents, selectedDate]
+  );
+  const upcomingEvents = useMemo(
+    () => allEvents.filter(event => event.date > selectedDate).slice(0, 5),
+    [allEvents, selectedDate]
+  );
+  const upcomingCultural = useMemo(
+    () => culturalObservances
+      .filter(obs => obs.date > selectedDate)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 5),
+    [selectedDate]
+  );
 
   useEffect(() => {
     const fetchPanchang = () => {
@@ -126,7 +219,6 @@ const App = () => {
         setPanchang(result);
       } catch (e) {
         setPanchang(null);
-        console.error('Panchang calculation error:', e);
         Alert.alert('Error', 'Failed to calculate Panchang');
       }
       setPanchangLoading(false);
@@ -134,6 +226,19 @@ const App = () => {
     fetchPanchang();
   }, [location, selectedDate]);
 
+  useEffect(() => {
+    const d = new Date(selectedDate);
+    const effectiveLocation = isValidLocation(location) ? location : delhiLocation;
+    setUsingDefaultLocation(!isValidLocation(location));
+    getFastingMarkings(
+      d.getFullYear(),
+      d.getMonth(),
+      effectiveLocation.latitude,
+      effectiveLocation.longitude
+    ).then(setFastingMarks);
+  }, [location, selectedDate]);
+
+  // Event Modal State/Handlers
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [eventTitle, setEventTitle] = useState('');
@@ -142,23 +247,54 @@ const App = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  // Marked Dates for calendar (combine all events, festivals, fasts)
   const markedDates = useMemo(() => {
-    const marks = {};
+    const marks = { ...(fastingMarks ?? {}) };
     allEvents.forEach(event => {
-      marks[event.date] = { marked: true, dotColor: '#50cebb' };
+      if (marks[event.date]) {
+        marks[event.date] = {
+          ...marks[event.date],
+          marked: true,
+          dots: (marks[event.date].dots || []).concat(
+            { color: '#50cebb' }
+          ),
+        };
+      } else {
+        marks[event.date] = { marked: true, dots: [{ color: '#50cebb' }] };
+      }
     });
-    marks[selectedDate] = { ...marks[selectedDate], selected: true, selectedColor: '#00adf5' };
+    marks[selectedDate] = {
+      ...(marks[selectedDate] || {}),
+      selected: true,
+      selectedColor: '#00adf5',
+    };
     return marks;
-  }, [allEvents, selectedDate]);
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const selectedDateEvents = useMemo(
-    () => allEvents.filter(event => event.date === selectedDate),
-    [allEvents, selectedDate]
+  }, [allEvents, selectedDate, fastingMarks]);
+
+  // SHOW ONLY IF DATE MATCHES (Today or Selected)
+  const thisDateCultural = useMemo(
+    () => culturalObservances.filter(obs => obs.date === selectedDate),
+    [selectedDate]
   );
-  const upcomingEvents = useMemo(
-    () => allEvents.filter(event => event.date > selectedDate).slice(0, 5),
-    [allEvents, selectedDate]
+  const todayCultural = useMemo(
+    () => culturalObservances.filter(obs => obs.date === today),
+    [today]
   );
+
+  const handleDayPress = (day) => {
+    setSelectedDate(day.dateString);
+    const fasts = fastingMarks[day.dateString]?.fasts;
+    const culturalFound = culturalObservances.filter(obs => obs.date === day.dateString);
+    if (culturalFound.length > 0) {
+      Alert.alert(
+        "Cultural Observance" + (culturalFound.length > 1 ? "s" : ""),
+        culturalFound.map(o => o.name + ": " + o.description).join("\n\n")
+      );
+    }
+    if (fasts && fasts.length > 0) {
+      Alert.alert('Fasting Day(s)', fasts.join(', '));
+    }
+  };
 
   const openAddEventModal = useCallback(() => {
     setEditingEvent(null);
@@ -232,16 +368,17 @@ const App = () => {
         <Text style={styles.eventText}>{event.title}</Text>
         {event.date !== selectedDate && <Text style={styles.eventDate}>{event.date}</Text>}
         {event.time && <Text style={styles.eventDate}>Time: {event.time}</Text>}
+        {event.description && <Text style={styles.eventDate}>({event.description})</Text>}
       </View>
       <View style={styles.eventActions}>
-        <TouchableOpacity 
-          style={styles.editButton} 
+        <TouchableOpacity
+          style={styles.editButton}
           onPress={() => onEdit(event)}
         >
           <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.deleteButton} 
+        <TouchableOpacity
+          style={styles.deleteButton}
           onPress={() => onDelete(event.id)}
         >
           <Text style={styles.deleteButtonText}>Delete</Text>
@@ -272,8 +409,22 @@ const App = () => {
         <View style={styles.box}>
           <Calendar
             markedDates={markedDates}
-            onDayPress={day => setSelectedDate(day.dateString)}
+            markingType="multi-dot"
+            onDayPress={handleDayPress}
           />
+          {/* Fasting Days and Event Legend */}
+          <View style={styles.legend}>
+            {FASTING_DAYS.map((f) => (
+              <View key={f.name} style={styles.legendRow}>
+                <View style={[styles.dot, { backgroundColor: f.color }]} />
+                <Text style={styles.legendLabel}>{f.name}</Text>
+              </View>
+            ))}
+            <View style={styles.legendRow}>
+              <View style={[styles.dot, { backgroundColor: '#50cebb' }]} />
+              <Text style={styles.legendLabel}>Event/Festival</Text>
+            </View>
+          </View>
         </View>
 
         {/* Panchang Box */}
@@ -305,14 +456,29 @@ const App = () => {
           )}
         </View>
 
-        {/* Today's Events Box */}
+        {/* Today's or Selected Cultural Observances */}
+        {thisDateCultural.length > 0 && (
+          <View style={styles.box}>
+            <Text style={styles.boxTitle}>
+              Cultural Observance{thisDateCultural.length > 1 ? 's' : ''} on {selectedDate}
+            </Text>
+            {thisDateCultural.map(obs => (
+              <View key={obs.name} style={{ marginBottom: 10 }}>
+                <Text style={{ fontWeight: 'bold', color: '#5e2d79' }}>{obs.name}</Text>
+                <Text style={{ color: '#444' }}>{obs.description}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Events Box */}
         <View style={styles.box}>
           <View style={styles.boxHeader}>
             <Text style={styles.boxTitle}>
               {selectedDate === today ? "Today's Events" : `Events on ${selectedDate}`}
             </Text>
-            <TouchableOpacity 
-              style={styles.addButton} 
+            <TouchableOpacity
+              style={styles.addButton}
               onPress={openAddEventModal}
             >
               <Text style={styles.addButtonText}>+ Add</Text>
@@ -348,6 +514,23 @@ const App = () => {
             ))
           )}
         </View>
+
+        {/* Upcoming Cultural Observances */}
+        <View style={styles.box}>
+          <Text style={styles.boxTitle}>Upcoming Cultural Observances</Text>
+          {upcomingCultural.length === 0 ? (
+            <Text style={styles.noEventText}>No upcoming cultural observances.</Text>
+          ) : (
+            upcomingCultural.map(obs => (
+              <View key={obs.name} style={{ marginBottom: 10 }}>
+                <Text style={{ fontWeight: 'bold', color: '#5e2d79' }}>
+                  {obs.name} ({obs.date})
+                </Text>
+                <Text style={{ color: '#444' }}>{obs.description}</Text>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
 
       {/* Add/Edit Event Modal */}
@@ -375,7 +558,7 @@ const App = () => {
               style={styles.textInput}
               onPress={() => setShowDatePicker(true)}
             >
-              <Text style={{color: eventDate ? '#333' : '#999'}}>
+              <Text style={{ color: eventDate ? '#333' : '#999' }}>
                 {eventDate || 'Select date'}
               </Text>
             </TouchableOpacity>
@@ -392,7 +575,7 @@ const App = () => {
               style={styles.textInput}
               onPress={() => setShowTimePicker(true)}
             >
-              <Text style={{color: eventTime ? '#333' : '#999'}}>
+              <Text style={{ color: eventTime ? '#333' : '#999' }}>
                 {eventTime || 'Select time'}
               </Text>
             </TouchableOpacity>
@@ -416,8 +599,8 @@ const App = () => {
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.saveButton} 
+              <TouchableOpacity
+                style={styles.saveButton}
                 onPress={saveEvent}
               >
                 <Text style={styles.saveButtonText}>
@@ -441,6 +624,10 @@ const styles = StyleSheet.create({
     margin: 16,
     elevation: 4,
   },
+  legend: { flexDirection: 'row', marginTop: 12, flexWrap: 'wrap' },
+  legendRow: { flexDirection: 'row', alignItems: 'center', marginRight: 15, marginBottom: 6 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 5 },
+  legendLabel: { fontSize: 13, color: '#444' },
   boxHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -541,3 +728,4 @@ const styles = StyleSheet.create({
 });
 
 export default App;
+
