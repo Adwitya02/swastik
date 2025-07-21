@@ -2,6 +2,8 @@
 A feature-rich calendar app built with React Native that supports:
 - Event creation and reminders
 - Hindu festival display
+- Fasting days with help of tithi calculations
+- Cultrual Observances based on a static list
 - Panchang (daily Hindu almanac) calculation using `mhah-panchang`
 - Geolocation for accurate Panchang data
 - Persistent event storage via AsyncStorage
