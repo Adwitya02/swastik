@@ -1,0 +1,107 @@
+[
+  {
+    "name": "Guru Purnima",
+    "description": "Honoring teachers and gurus",
+    "significance": "Reverence for knowledge and wisdom",
+    "observance": "Teacher worship, knowledge reverence, expressing gratitude to gurus",
+    "date": "2025-07-11"
+  },
+  {
+    "name": "Raksha Bandhan",
+    "description": "Celebrates the bond between siblings",
+    "significance": "Brother-sister love and protection",
+    "observance": "Sister ties rakhi on brother's wrist, prayers for protection",
+    "date": "2025-08-09"
+  },
+  {
+    "name": "Karva Chauth",
+    "description": "Married women fast for husbands' well-being",
+    "significance": "Marital devotion and love",
+    "observance": "Day-long fasting, moon worship, prayers for husband's long life",
+    "date": "2025-10-29"
+  },
+  {
+    "name": "Vat Purnima",
+    "description": "Fast and ritual for husbands' health",
+    "significance": "Devotion and longevity in marriage",
+    "observance": "Worshipping banyan tree, prayers for husband's welfare",
+    "date": "2025-06-10"
+  },
+  {
+    "name": "Akshaya Tritiya",
+    "description": "Auspicious day for new beginnings",
+    "significance": "Prosperity and good fortune",
+    "observance": "Gold purchasing, new ventures, charity work",
+    "date": "2025-04-30"
+  },
+  {
+    "name": "Navaratri",
+    "description": "Nine-night festival for Goddess Durga",
+    "significance": "Divine feminine power celebration",
+    "observance": "Dancing, fasting, goddess worship, cultural performances",
+    "date": "2025-09-22"
+  },
+  {
+    "name": "Janmashtami",
+    "description": "Birth of Lord Krishna",
+    "significance": "Devotion and divine love",
+    "observance": "Midnight celebrations, fasting, Dahi Handi, devotional singing",
+    "date": "2025-08-16"
+  },
+  {
+    "name": "Maha Shivaratri",
+    "description": "Night for Lord Shiva worship",
+    "significance": "Overcoming darkness and ignorance",
+    "observance": "Night vigil, fasting, meditation, temple visits",
+    "date": "2025-02-25"
+  },
+  {
+    "name": "Ram Navami",
+    "description": "Birth of Lord Rama",
+    "significance": "Righteousness and dharma",
+    "observance": "Ramayana recitation, temple visits, processions",
+    "date": "2025-04-06"
+  },
+  {
+    "name": "Ganesh Chaturthi",
+    "description": "Birth of Lord Ganesha",
+    "significance": "Removal of obstacles, new beginnings",
+    "observance": "10-day celebration, idol immersion, community prayers",
+    "date": "2025-08-28"
+  },
+  {
+    "name": "Hanuman Jayanti",
+    "description": "Birth of Lord Hanuman",
+    "significance": "Devotion, strength, and courage",
+    "observance": "Hanuman Chalisa recitation, temple visits, physical strength displays",
+    "date": "2025-04-11"
+  },
+  {
+    "name": "Nag Panchami",
+    "description": "Snake worship festival",
+    "significance": "Protection from serpents, traditional rituals",
+    "observance": "Snake worship, milk offerings, traditional prayers",
+    "date": "2025-07-29"
+  },
+  {
+    "name": "Makar Sankranti / Pongal",
+    "description": "Harvest festival; Pongal in South",
+    "significance": "Sun worship, harvest gratitude",
+    "observance": "Kite flying, harvest celebration, sun worship, traditional foods",
+    "date": "2025-01-14"
+  },
+  {
+    "name": "Vasant Panchami",
+    "description": "Start of spring; Saraswati Puja",
+    "significance": "Knowledge, arts, and wisdom",
+    "observance": "Goddess Saraswati worship, wearing yellow, cultural activities",
+    "date": "2025-01-29"
+  },
+  {
+    "name": "Mahavir Jayanti",
+    "description": "Birthday of Lord Mahavira",
+    "significance": "Jainism principles, non-violence",
+    "observance": "Temple visits, charity, meditation, non-violence emphasis",
+    "date": "2025-04-10"
+  }
+]

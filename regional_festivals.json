@@ -1,0 +1,68 @@
+[
+  {
+    "state": "Kerala",
+    "festival_name": "Onam",
+    "description": "Harvest festival celebrating King Mahabali's return",
+    "staticDate2025": "2025-09-05"
+  },
+  {
+    "state": "Kerala",
+    "festival_name": "Vishu",
+    "description": "Malayalam New Year",
+    "staticDate2025": "2025-04-15"
+  },
+  {
+    "state": "Kerala",
+    "festival_name": "Thrissur Pooram",
+    "description": "Temple festival with elephant processions",
+    "staticDate2025": "2025-05-20"
+  },
+  {
+    "state": "Kerala",
+    "festival_name": "Theyyam",
+    "description": "Ritual art form and festival",
+    "staticDate2025": "2025-12-15"
+  },
+  {
+    "state": "Kerala",
+    "festival_name": "Nehru Trophy Boat Race",
+    "description": "Snake boat racing festival",
+    "staticDate2025": "2025-08-12"
+  },
+  {
+    "state": "Maharashtra",
+    "festival_name": "Ganesh Chaturthi",
+    "description": "Lord Ganesha birth celebration with processions",
+    "staticDate2025": "2025-08-28"
+  },
+  {
+    "state": "Maharashtra",
+    "festival_name": "Gudi Padwa",
+    "description": "Marathi New Year",
+    "staticDate2025": "2025-03-30"
+  },
+  {
+    "state": "West Bengal",
+    "festival_name": "Durga Puja",
+    "description": "Grand celebration of Goddess Durga",
+    "staticDate2025": "2025-09-30"
+  },
+  {
+    "state": "West Bengal",
+    "festival_name": "Kali Puja",
+    "description": "Goddess Kali worship",
+    "staticDate2025": "2025-10-21"
+  },
+  {
+    "state": "Punjab",
+    "festival_name": "Baisakhi",
+    "description": "Harvest festival and Khalsa formation day",
+    "staticDate2025": "2025-04-13"
+  },
+  {
+    "state": "Punjab",
+    "festival_name": "Lohri",
+    "description": "Bonfire festival marking end of winter",
+    "staticDate2025": "2025-01-13"
+  }
+]
