@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, {
+  useState,
+  useReducer,
+  useMemo,
+  useEffect,
+  Fragment,
+} from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -16,716 +22,602 @@ import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Geolocation from 'react-native-geolocation-service';
-import { MhahPanchang } from 'mhah-panchang';
 import moment from 'moment';
+import { MhahPanchang } from 'mhah-panchang';
 
-// Major Festivals (static)
-const majorFestivalsStatic = [
-  { id: 'f1', name: "Diwali", date: "2025-10-20", description: "Festival of Lights" },
-  { id: 'f2', name: "Holi", date: "2025-03-14", description: "Festival of Colors" },
-  { id: 'f3', name: "Makar Sankranti", date: "2025-01-14", description: "Sun enters Capricorn" }
-];
+import majorFestivalsCatalog from './data/major_festivals.json';
+import culturalObservancesCatalog from './data/cultural_observances.json';
+import regionalFestivalsCatalog from './data/regional_festivals.json';
 
-// Regional Festivals (static, example with Kerala; adapt for dynamic region use)
-const regionalFestivals = {
-  "Kerala": [
-    { id: 'r1', name: "Onam", date: "2025-09-05", description: "Harvest festival" },
-    { id: 'r2', name: "Vishu", date: "2025-04-15", description: "Malayali New Year" }
-  ]
-};
-const userRegion = "Kerala"; // Replace with user picker or location-based mapping
+const STORAGE_KEY = 'USER_EVENTS';
+const DEFAULT_LOCATION = { latitude: 28.6139, longitude: 77.2090 };
 
-// Cultural Observances: dated for 2025 (example dates)
-const culturalObservances = [
-  { name: "Guru Purnima", date: "2025-07-11", description: "Honoring teachers and gurus." },
-  { name: "Raksha Bandhan", date: "2025-08-09", description: "Celebrates the bond between siblings." },
-  { name: "Karva Chauth", date: "2025-10-29", description: "Married women fast for husbands' well-being." },
-  { name: "Vat Purnima", date: "2025-06-10", description: "Fast and ritual for husbands' health." },
-  { name: "Akshaya Tritiya", date: "2025-04-30", description: "Auspicious day for new beginnings." },
-  { name: "Navaratri", date: "2025-09-22", description: "Nine-night festival for Goddess Durga." },
-  { name: "Janmashtami", date: "2025-08-16", description: "Birth of Lord Krishna." },
-  { name: "Maha Shivaratri", date: "2025-02-25", description: "Night for Lord Shiva worship." },
-  { name: "Ram Navami", date: "2025-04-06", description: "Birth of Lord Rama." },
-  { name: "Ganesh Chaturthi", date: "2025-08-28", description: "Birth of Lord Ganesha." },
-  { name: "Hanuman Jayanti", date: "2025-04-11", description: "Birth of Lord Hanuman." },
-  { name: "Makar Sankranti / Pongal", date: "2025-01-14", description: "Harvest festival; Pongal in South." },
-  { name: "Vasant Panchami", date: "2025-01-29", description: "Start of spring; Saraswati Puja." },
-  { name: "Mahavir Jayanti", date: "2025-04-10", description: "Birthday of Lord Mahavira." }
-];
-
-// Fasting Day Rules
-const FASTING_DAYS = [
+const FASTING_RULES = [
   {
     name: 'Ekadashi',
     color: '#47B881',
-    matcher: p => p.Tithi?.name?.includes('Ekadashi')
+    matcher: p => p.Tithi?.name?.includes('Ekadashi'),
   },
   {
     name: 'Pradosh',
     color: '#FF8700',
-    matcher: p => p.Tithi?.name?.includes('Trayodashi')
+    matcher: p => p.Tithi?.name?.includes('Trayodashi'),
   },
   {
     name: 'Shivratri',
     color: '#6B47DC',
-    matcher: p => p.Tithi?.name?.includes('Chaturdashi') && p.Masa === 'Magha' && p.Paksha === 'Krishna'
-  }
+    matcher: p =>
+      p.Tithi?.name?.includes('Chaturdashi') &&
+      p.Masa === 'Magha' &&
+      p.Paksha === 'Krishna',
+  },
 ];
 
-// Utility: fasting day marking calculation
-async function getFastingMarkings(year, month, lat, lon) {
+const isValidLocation = loc =>
+  !!loc &&
+  typeof loc.latitude === 'number' &&
+  typeof loc.longitude === 'number' &&
+  Math.abs(loc.latitude) <= 90 &&
+  Math.abs(loc.longitude) <= 180;
+
+const groupRegionalFestivals = () =>
+  regionalFestivalsCatalog.reduce((acc, { state, festival_name, description, staticDate2025 }) => {
+    if (!acc[state]) acc[state] = [];
+    acc[state].push({
+      name: festival_name,
+      description,
+      staticDate2025: staticDate2025 || '2025-01-01',
+    });
+    return acc;
+  }, {});
+
+const getStateFromCoords = async (lat, lon) => {
+  return null; // stub for now. Replace with geocode API later
+};
+
+const getFastingMarkings = async (year, month, lat, lon) => {
   const panchang = new MhahPanchang();
   const days = moment({ year, month }).daysInMonth();
   const markings = {};
   for (let d = 1; d <= days; d++) {
     const date = moment({ year, month, day: d }).toDate();
-    const pan = panchang.calendar(date, lat, lon);
-    FASTING_DAYS.forEach(rule => {
-      if (rule.matcher(pan)) {
-        const ds = moment(date).format('YYYY-MM-DD');
-        if (!markings[ds])
-          markings[ds] = { marked: true, dots: [{ color: rule.color }], fasts: [rule.name] };
-        else {
-          markings[ds].dots = markings[ds].dots || [];
-          markings[ds].fasts = markings[ds].fasts || [];
-          markings[ds].dots.push({ color: rule.color });
-          markings[ds].fasts.push(rule.name);
-        }
+    const data = panchang.calendar(date, lat, lon);
+    FASTING_RULES.forEach(rule => {
+      if (rule.matcher(data)) {
+        const key = moment(date).format('YYYY-MM-DD');
+        const entry = markings[key] || { marked: true, dots: [], fasts: [] };
+        entry.dots.push({ color: rule.color });
+        entry.fasts.push(rule.name);
+        markings[key] = entry;
       }
     });
   }
   return markings;
-}
+};
 
-const STORAGE_KEY = 'USER_EVENTS';
-const delhiLocation = { latitude: 28.6139, longitude: 77.2090, altitude: 216 };
-const isValidLocation = loc =>
-  loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number' &&
-  !isNaN(loc.latitude) && !isNaN(loc.longitude) &&
-  Math.abs(loc.latitude) <= 90 && Math.abs(loc.longitude) <= 180;
+const eventsReducer = (state, action) => {
+  switch (action.type) {
+    case 'add':
+      return [...state, action.payload];
+    case 'update':
+      return state.map(e => (e.id === action.payload.id ? action.payload : e));
+    case 'delete':
+      return state.filter(e => e.id !== action.payload);
+    case 'set':
+      return action.payload || [];
+    default:
+      return state;
+  }
+};
 
-const App = () => {
-  const [events, setEvents] = useState([
-    { id: '1', date: '2025-07-01', title: 'dinner with family', time: '19:00' },
-    { id: '2', date: '2025-07-07', title: 'college start', time: '09:00' },
-    { id: '3', date: '2025-07-30', title: 'Project deadline', time: '23:59' },
-    { id: '4', date: '2025-07-02', title: 'my birthday', time: '00:00' },
-  ]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [location, setLocation] = useState({ latitude: null, longitude: null, altitude: 0 });
-  const [locationError, setLocationError] = useState(null);
+export default function App() {
+  const [events, dispatchEvents] = useReducer(eventsReducer, []);
+  const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
+  const [location, setLocation] = useState(null);
   const [usingDefaultLocation, setUsingDefaultLocation] = useState(false);
-  const [fastingMarks, setFastingMarks] = useState({});
+
+  const [fastingDots, setFastingDots] = useState({});
   const [panchang, setPanchang] = useState(null);
   const [panchangLoading, setPanchangLoading] = useState(false);
 
-  // Location fetch
-  useEffect(() => {
-    const requestLocation = async () => {
-      try {
-        if (Platform.OS === 'android') {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            setLocationError('Location permission denied');
-            setUsingDefaultLocation(true);
-            return;
-          }
-        }
-        Geolocation.getCurrentPosition(
-          (pos) => {
-            setLocation({
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              altitude: pos.coords.altitude || 0,
-            });
-            setLocationError(null);
-            setUsingDefaultLocation(false);
-          },
-          (error) => {
-            setLocationError(error.message);
-            setUsingDefaultLocation(true);
-          },
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-        );
-      } catch (err) {
-        setLocationError('Failed to get location');
-        setUsingDefaultLocation(true);
-      }
-    };
-    requestLocation();
-  }, []);
-
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) setEvents(JSON.parse(stored));
-      } catch (e) {
-        console.log('Failed to load events:', e);
-      }
-    };
-    loadEvents();
-  }, []);
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(e =>
-      console.log('Failed to save events:', e)
-    );
-  }, [events]);
-
-  // Merge all events (user + major + regional)
-  const allEvents = useMemo(() => [
-    ...events,
-    ...majorFestivalsStatic.map(f => ({
-      id: f.id,
-      date: f.date,
-      title: f.name,
-      description: f.description
-    })),
-    ...(regionalFestivals[userRegion] || [])
-  ], [events]);
-
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const selectedDateEvents = useMemo(
-    () => allEvents.filter(event => event.date === selectedDate),
-    [allEvents, selectedDate]
-  );
-  const upcomingEvents = useMemo(
-    () => allEvents.filter(event => event.date > selectedDate).slice(0, 5),
-    [allEvents, selectedDate]
-  );
-  const upcomingCultural = useMemo(
-    () => culturalObservances
-      .filter(obs => obs.date > selectedDate)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 5),
-    [selectedDate]
-  );
-
-  useEffect(() => {
-    const fetchPanchang = () => {
-      const effectiveLocation = isValidLocation(location) ? location : delhiLocation;
-      setUsingDefaultLocation(!isValidLocation(location));
-      setPanchangLoading(true);
-      try {
-        const obj = new MhahPanchang();
-        const dateObj = new Date(selectedDate);
-        const result = obj.calendar(
-          dateObj,
-          effectiveLocation.latitude,
-          effectiveLocation.longitude
-        );
-        setPanchang(result);
-      } catch (e) {
-        setPanchang(null);
-        Alert.alert('Error', 'Failed to calculate Panchang');
-      }
-      setPanchangLoading(false);
-    };
-    fetchPanchang();
-  }, [location, selectedDate]);
-
-  useEffect(() => {
-    const d = new Date(selectedDate);
-    const effectiveLocation = isValidLocation(location) ? location : delhiLocation;
-    setUsingDefaultLocation(!isValidLocation(location));
-    getFastingMarkings(
-      d.getFullYear(),
-      d.getMonth(),
-      effectiveLocation.latitude,
-      effectiveLocation.longitude
-    ).then(setFastingMarks);
-  }, [location, selectedDate]);
-
-  // Event Modal State/Handlers
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [eventTitle, setEventTitle] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [eventTime, setEventTime] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [form, setForm] = useState({ title: '', date: '', time: '' });
 
-  // Marked Dates for calendar (combine all events, festivals, fasts)
-  const markedDates = useMemo(() => {
-    const marks = { ...(fastingMarks ?? {}) };
-    allEvents.forEach(event => {
-      if (marks[event.date]) {
-        marks[event.date] = {
-          ...marks[event.date],
-          marked: true,
-          dots: (marks[event.date].dots || []).concat(
-            { color: '#50cebb' }
-          ),
-        };
-      } else {
-        marks[event.date] = { marked: true, dots: [{ color: '#50cebb' }] };
+  const regionalFestivalsMap = useMemo(groupRegionalFestivals, []);
+
+  const today = useMemo(() => moment().format('YYYY-MM-DD'), []);
+
+  useEffect(() => {
+    const askPermission = async () => {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return false;
       }
-    });
-    marks[selectedDate] = {
-      ...(marks[selectedDate] || {}),
-      selected: true,
-      selectedColor: '#00adf5',
+      return true;
     };
-    return marks;
-  }, [allEvents, selectedDate, fastingMarks]);
 
-  // SHOW ONLY IF DATE MATCHES (Today or Selected)
-  const thisDateCultural = useMemo(
-    () => culturalObservances.filter(obs => obs.date === selectedDate),
-    [selectedDate]
-  );
-  const todayCultural = useMemo(
-    () => culturalObservances.filter(obs => obs.date === today),
-    [today]
-  );
-
-  const handleDayPress = (day) => {
-    setSelectedDate(day.dateString);
-    const fasts = fastingMarks[day.dateString]?.fasts;
-    const culturalFound = culturalObservances.filter(obs => obs.date === day.dateString);
-    if (culturalFound.length > 0) {
-      Alert.alert(
-        "Cultural Observance" + (culturalFound.length > 1 ? "s" : ""),
-        culturalFound.map(o => o.name + ": " + o.description).join("\n\n")
-      );
-    }
-    if (fasts && fasts.length > 0) {
-      Alert.alert('Fasting Day(s)', fasts.join(', '));
-    }
-  };
-
-  const openAddEventModal = useCallback(() => {
-    setEditingEvent(null);
-    setEventTitle('');
-    setEventDate(selectedDate);
-    setEventTime('12:00');
-    setModalVisible(true);
-  }, [selectedDate]);
-  const openEditEventModal = useCallback((event) => {
-    setEditingEvent(event);
-    setEventTitle(event.title);
-    setEventDate(event.date);
-    setEventTime(event.time || '12:00');
-    setModalVisible(true);
-  }, []);
-  const saveEvent = useCallback(() => {
-    if (!eventTitle.trim()) {
-      Alert.alert('Error', 'Please enter an event title');
-      return;
-    }
-    if (!eventDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      Alert.alert('Error', 'Date must be in YYYY-MM-DD format');
-      return;
-    }
-    if (!eventTime.match(/^\d{2}:\d{2}$/)) {
-      Alert.alert('Error', 'Time must be in HH:MM format');
-      return;
-    }
-    if (editingEvent) {
-      setEvents(prevEvents =>
-        prevEvents.map(event =>
-          event.id === editingEvent.id
-            ? { ...event, title: eventTitle, date: eventDate, time: eventTime }
-            : event
-        )
-      );
-    } else {
-      const newEvent = {
-        id: Date.now().toString(),
-        title: eventTitle,
-        date: eventDate,
-        time: eventTime,
-      };
-      setEvents(prevEvents => [...prevEvents, newEvent]);
-    }
-    setModalVisible(false);
-    setEventTitle('');
-    setEventDate('');
-    setEventTime('');
-    setEditingEvent(null);
-  }, [eventTitle, eventDate, eventTime, editingEvent]);
-  const deleteEvent = useCallback((eventId) => {
-    Alert.alert(
-      'Delete Event',
-      'Are you sure you want to delete this event?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
-          },
+    const fetchLocation = async () => {
+      const ok = await askPermission();
+      if (!ok) {
+        setUsingDefaultLocation(true);
+        return;
+      }
+      Geolocation.getCurrentPosition(
+        async pos => {
+          setLocation(pos.coords);
+          setUsingDefaultLocation(false);
         },
-      ]
-    );
+        () => setUsingDefaultLocation(true),
+        { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 },
+      );
+    };
+
+    fetchLocation();
   }, []);
-  const EventItem = React.memo(({ event, onEdit, onDelete }) => (
-    <View style={styles.eventItem}>
-      <View>
-        <Text style={styles.eventText}>{event.title}</Text>
-        {event.date !== selectedDate && <Text style={styles.eventDate}>{event.date}</Text>}
-        {event.time && <Text style={styles.eventDate}>Time: {event.time}</Text>}
-        {event.description && <Text style={styles.eventDate}>({event.description})</Text>}
-      </View>
-      <View style={styles.eventActions}>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => onEdit(event)}
-        >
-          <Text style={styles.editButtonText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => onDelete(event.id)}
-        >
-          <Text style={styles.deleteButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  ));
-  const onDateChange = (event, selected) => {
-    setShowDatePicker(false);
-    if (selected) {
-      const iso = selected.toISOString().split('T')[0];
-      setEventDate(iso);
-    }
+
+  const [userState, setUserState] = useState('Kerala');
+  useEffect(() => {
+    (async () => {
+      if (!location) return;
+      const st = await getStateFromCoords(location.latitude, location.longitude);
+      if (st) setUserState(st);
+    })();
+  }, [location]);
+
+  useEffect(() => {
+    (async () => {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) dispatchEvents({ type: 'set', payload: JSON.parse(stored) });
+    })();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  }, [events]);
+
+  const majorFestivals = useMemo(
+    () =>
+      majorFestivalsCatalog.map(f => ({
+        id: `major-${f.name}`,
+        title: f.name,
+        description: f.description,
+        date: f.staticDate2025 || '2025-01-01',
+      })),
+    [],
+  );
+  const regionalFestivals = useMemo(() => {
+    const region = regionalFestivalsMap[userState] || [];
+    return region.map(f => ({
+      id: `regional-${f.name}`,
+      title: f.name,
+      description: f.description,
+      date: f.staticDate2025 || '2025-01-01',
+    }));
+  }, [userState, regionalFestivalsMap]);
+  const allEvents = useMemo(
+    () => [...events, ...majorFestivals, ...regionalFestivals],
+    [events, majorFestivals, regionalFestivals],
+  );
+
+  // For "events on selected date"
+  const selectedEvents = useMemo(
+    () => allEvents.filter(e => e.date === selectedDate),
+    [allEvents, selectedDate],
+  );
+
+  // For 5 upcoming events after today (not after selected date)
+  const upcomingEvents = useMemo(
+    () =>
+      allEvents
+        .filter(e => e.date > today)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 5),
+    [allEvents, today],
+  );
+
+  // For "cultural observances on selected date"
+  const culturalToday = useMemo(
+    () => culturalObservancesCatalog.filter(o => o.date === selectedDate),
+    [selectedDate],
+  );
+
+  // 5 upcoming cultural observances after today
+  const upcomingCultural = useMemo(
+    () =>
+      culturalObservancesCatalog
+        .filter(o => o.date > today)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 5),
+    [today],
+  );
+
+  useEffect(() => {
+    const run = async () => {
+      const loc = isValidLocation(location) ? location : DEFAULT_LOCATION;
+      setPanchangLoading(true);
+      try {
+        const data = new MhahPanchang().calendar(
+          new Date(selectedDate),
+          loc.latitude,
+          loc.longitude,
+        );
+        setPanchang(data);
+      } catch {
+        setPanchang(null);
+      } finally {
+        setPanchangLoading(false);
+      }
+    };
+    run();
+  }, [location, selectedDate]);
+
+  useEffect(() => {
+    (async () => {
+      const d = moment(selectedDate);
+      const loc = isValidLocation(location) ? location : DEFAULT_LOCATION;
+      const dots = await getFastingMarkings(
+        d.year(),
+        d.month(),
+        loc.latitude,
+        loc.longitude,
+      );
+      setFastingDots(dots);
+    })();
+  }, [location, selectedDate]);
+
+  const markedDates = useMemo(() => {
+    const marks = { ...fastingDots };
+    allEvents.forEach(ev => {
+      const base = marks[ev.date] || { marked: true, dots: [] };
+      base.dots.push({ color: '#50cebb' });
+      marks[ev.date] = base;
+    });
+    marks[selectedDate] = { ...(marks[selectedDate] || {}), selected: true };
+    return marks;
+  }, [fastingDots, allEvents, selectedDate]);
+
+  const openAddModal = () => {
+    setEditingEvent(null);
+    setForm({ title: '', date: selectedDate, time: '12:00' });
+    setModalVisible(true);
   };
-  const onTimeChange = (event, selected) => {
-    setShowTimePicker(false);
-    if (selected) {
-      const hours = selected.getHours().toString().padStart(2, '0');
-      const minutes = selected.getMinutes().toString().padStart(2, '0');
-      setEventTime(`${hours}:${minutes}`);
-    }
+
+  const openEditModal = ev => {
+    setEditingEvent(ev);
+    setForm({ title: ev.title, date: ev.date, time: ev.time || '12:00' });
+    setModalVisible(true);
   };
+
+  const saveEvent = () => {
+    const { title, date, time } = form;
+    if (!title.trim()) return Alert.alert('Title required');
+    const payload = { id: editingEvent?.id || Date.now().toString(), title, date, time };
+    dispatchEvents({ type: editingEvent ? 'update' : 'add', payload });
+    setModalVisible(false);
+  };
+
+  const deleteEvent = id =>
+    Alert.alert('Delete?', 'Confirm delete?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => dispatchEvents({ type: 'delete', payload: id }),
+      },
+    ]);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
-        {/* Calendar Box */}
         <View style={styles.box}>
           <Calendar
             markedDates={markedDates}
             markingType="multi-dot"
-            onDayPress={handleDayPress}
+            onDayPress={day => setSelectedDate(day.dateString)}
           />
-          {/* Fasting Days and Event Legend */}
           <View style={styles.legend}>
-            {FASTING_DAYS.map((f) => (
-              <View key={f.name} style={styles.legendRow}>
-                <View style={[styles.dot, { backgroundColor: f.color }]} />
-                <Text style={styles.legendLabel}>{f.name}</Text>
-              </View>
+            {FASTING_RULES.map(r => (
+              <LegendDot key={r.name} label={r.name} color={r.color} />
             ))}
-            <View style={styles.legendRow}>
-              <View style={[styles.dot, { backgroundColor: '#50cebb' }]} />
-              <Text style={styles.legendLabel}>Event/Festival</Text>
-            </View>
+            <LegendDot label="Event / Festival" color="#50cebb" />
           </View>
         </View>
 
-        {/* Panchang Box */}
         <View style={styles.box}>
-          <Text style={styles.boxTitle}>Panchang for {selectedDate}</Text>
+          <Text style={styles.boxTitle}>Panchang · {selectedDate}</Text>
           {usingDefaultLocation && (
-            <Text style={{ color: '#b36b00', marginBottom: 4 }}>
-              Using default location: Delhi
-            </Text>
+            <Text style={styles.warn}>Using default location (Delhi)</Text>
           )}
-          {locationError && !usingDefaultLocation && (
-            <Text style={{ color: 'red' }}>Location error: {locationError}</Text>
-          )}
-          {panchangLoading ? (
-            <Text>Loading Panchang...</Text>
-          ) : panchang ? (
-            <>
-              <Text>Tithi: {panchang.Tithi?.name_en_IN}</Text>
-              <Text>Paksha: {panchang.Paksha?.name_en_IN}</Text>
-              <Text>Nakshatra: {panchang.Nakshatra?.name_en_IN}</Text>
-              <Text>Yoga: {panchang.Yoga?.name_en_IN}</Text>
-              <Text>Karna: {panchang.Karna?.name_en_IN}</Text>
-              <Text>Masa: {panchang.Masa?.name_en_UK}</Text>
-              <Text>Raasi: {panchang.Raasi?.name_en_UK}</Text>
-              <Text>Ritu: {panchang.Ritu?.name_en_UK}</Text>
-            </>
-          ) : (
-            <Text>No Panchang data available.</Text>
+          {panchangLoading && <Text>Loading…</Text>}
+          {!panchangLoading && panchang && (
+            <Fragment>
+              <PItem label="Tithi" value={panchang.Tithi?.name_en_IN} />
+              <PItem label="Paksha" value={panchang.Paksha?.name_en_IN} />
+              <PItem label="Nakshatra" value={panchang.Nakshatra?.name_en_IN} />
+              <PItem label="Yoga" value={panchang.Yoga?.name_en_IN} />
+              <PItem label="Karna" value={panchang.Karna?.name_en_IN} />
+              <PItem label="Masa" value={panchang.Masa?.name_en_UK} />
+              <PItem label="Raasi" value={panchang.Raasi?.name_en_UK} />
+              <PItem label="Ritu" value={panchang.Ritu?.name_en_UK} />
+            </Fragment>
           )}
         </View>
 
-        {/* Today's or Selected Cultural Observances */}
-        {thisDateCultural.length > 0 && (
+        {/* Show cultural observances for selected date if any */}
+        {culturalToday.length > 0 && (
           <View style={styles.box}>
-            <Text style={styles.boxTitle}>
-              Cultural Observance{thisDateCultural.length > 1 ? 's' : ''} on {selectedDate}
-            </Text>
-            {thisDateCultural.map(obs => (
-              <View key={obs.name} style={{ marginBottom: 10 }}>
-                <Text style={{ fontWeight: 'bold', color: '#5e2d79' }}>{obs.name}</Text>
-                <Text style={{ color: '#444' }}>{obs.description}</Text>
+            <Text style={styles.boxTitle}>Cultural Observances · {selectedDate}</Text>
+            {culturalToday.map(o => (
+              <View key={o.name} style={{ marginBottom: 8 }}>
+                <Text style={{ fontWeight: 'bold', color: '#5e2d79' }}>{o.name}</Text>
+                <Text style={{ color: '#555' }}>{o.description}</Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* Events Box */}
-        <View style={styles.box}>
-          <View style={styles.boxHeader}>
-            <Text style={styles.boxTitle}>
-              {selectedDate === today ? "Today's Events" : `Events on ${selectedDate}`}
-            </Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={openAddEventModal}
-            >
-              <Text style={styles.addButtonText}>+ Add</Text>
-            </TouchableOpacity>
-          </View>
-          {selectedDateEvents.length === 0 ? (
-            <Text style={styles.noEventText}>No events for this day.</Text>
-          ) : (
-            selectedDateEvents.map((event) => (
-              <EventItem
-                key={event.id}
-                event={event}
-                onEdit={openEditEventModal}
-                onDelete={deleteEvent}
-              />
-            ))
-          )}
-        </View>
+        <EventsBox
+          title={
+            selectedDate === today
+              ? "Today's Events"
+              : `Events · ${selectedDate}`
+          }
+          events={selectedEvents}
+          onAdd={openAddModal}
+          onEdit={openEditModal}
+          onDelete={deleteEvent}
+        />
 
-        {/* Upcoming Events Box */}
-        <View style={styles.box}>
-          <Text style={styles.boxTitle}>Upcoming Events</Text>
-          {upcomingEvents.length === 0 ? (
-            <Text style={styles.noEventText}>No upcoming events.</Text>
-          ) : (
-            upcomingEvents.map((event) => (
-              <EventItem
-                key={event.id}
-                event={event}
-                onEdit={openEditEventModal}
-                onDelete={deleteEvent}
-              />
-            ))
-          )}
-        </View>
+        <EventsBox
+          title="Upcoming Events"
+          events={upcomingEvents}
+          hideAdd
+          onEdit={openEditModal}
+          onDelete={deleteEvent}
+        />
 
-        {/* Upcoming Cultural Observances */}
-        <View style={styles.box}>
-          <Text style={styles.boxTitle}>Upcoming Cultural Observances</Text>
-          {upcomingCultural.length === 0 ? (
-            <Text style={styles.noEventText}>No upcoming cultural observances.</Text>
-          ) : (
-            upcomingCultural.map(obs => (
-              <View key={obs.name} style={{ marginBottom: 10 }}>
-                <Text style={{ fontWeight: 'bold', color: '#5e2d79' }}>
-                  {obs.name} ({obs.date})
-                </Text>
-                <Text style={{ color: '#444' }}>{obs.description}</Text>
-              </View>
-            ))
-          )}
-        </View>
+        <CulturalBox
+          title="Upcoming Cultural Observances"
+          data={upcomingCultural}
+        />
       </ScrollView>
 
-      {/* Add/Edit Event Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      <Modal visible={modalVisible} animationType="slide" transparent>
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
             <Text style={styles.modalTitle}>
-              {editingEvent ? 'Edit Event' : 'Add New Event'}
+              {editingEvent ? 'Edit Event' : 'Add Event'}
             </Text>
-            <Text style={styles.inputLabel}>Event Title</Text>
-            <TextInput
-              style={styles.textInput}
-              value={eventTitle}
-              onChangeText={setEventTitle}
-              placeholder="Enter event title"
-              placeholderTextColor="#999"
+            <Field
+              label="Title"
+              placeholder="Event name"
+              value={form.title}
+              onChangeText={v => setForm({ ...form, title: v })}
             />
-            <Text style={styles.inputLabel}>Date</Text>
-            <TouchableOpacity
-              style={styles.textInput}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={{ color: eventDate ? '#333' : '#999' }}>
-                {eventDate || 'Select date'}
-              </Text>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <DateTimePicker
-                value={eventDate ? new Date(eventDate) : new Date()}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={onDateChange}
-              />
-            )}
-            <Text style={styles.inputLabel}>Time</Text>
-            <TouchableOpacity
-              style={styles.textInput}
-              onPress={() => setShowTimePicker(true)}
-            >
-              <Text style={{ color: eventTime ? '#333' : '#999' }}>
-                {eventTime || 'Select time'}
-              </Text>
-            </TouchableOpacity>
-            {showTimePicker && (
-              <DateTimePicker
-                value={
-                  eventTime
-                    ? new Date(`1970-01-01T${eventTime}:00`)
-                    : new Date()
-                }
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={onTimeChange}
-                is24Hour={true}
-              />
-            )}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={saveEvent}
-              >
-                <Text style={styles.saveButtonText}>
-                  {editingEvent ? 'Update' : 'Save'}
-                </Text>
-              </TouchableOpacity>
+            <DateTimeField
+              label="Date"
+              mode="date"
+              value={form.date}
+              onChange={v => setForm({ ...form, date: v })}
+            />
+            <DateTimeField
+              label="Time"
+              mode="time"
+              value={form.time}
+              onChange={v => setForm({ ...form, time: v })}
+            />
+            <View style={styles.row}>
+              <ModalBtn text="Cancel" gray onPress={() => setModalVisible(false)} />
+              <ModalBtn text="Save" onPress={saveEvent} />
+              {editingEvent && (
+                <ModalBtn
+                  text="Delete"
+                  red
+                  onPress={() => {
+                    setModalVisible(false);
+                    deleteEvent(editingEvent.id);
+                  }}
+                />
+              )}
             </View>
           </View>
         </View>
       </Modal>
     </SafeAreaView>
   );
+}
+
+const LegendDot = ({ label, color }) => (
+  <View style={styles.legendRow}>
+    <View style={[styles.dot, { backgroundColor: color }]} />
+    <Text style={styles.legendLabel}>{label}</Text>
+  </View>
+);
+
+const PItem = ({ label, value }) => (
+  <Text>
+    {label}: <Text style={{ fontWeight: 'bold' }}>{value || '-'}</Text>
+  </Text>
+);
+
+const EventsBox = ({ title, events, onAdd, hideAdd, onEdit, onDelete }) => (
+  <View style={styles.box}>
+    <View style={styles.header}>
+      <Text style={styles.boxTitle}>{title}</Text>
+      {!hideAdd && (
+        <TouchableOpacity style={styles.addBtn} onPress={onAdd}>
+          <Text style={styles.addTxt}>＋</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+    {events.length === 0 ? (
+      <Text style={styles.empty}>No events</Text>
+    ) : (
+      events.map(ev => (
+        <View key={ev.id} style={styles.eventRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eventTitle}>{ev.title}</Text>
+            <Text style={styles.eventSub}>{ev.date}</Text>
+            {ev.time && <Text style={styles.eventSub}>⏰ {ev.time}</Text>}
+            {ev.description && <Text style={styles.eventSub}>{ev.description}</Text>}
+          </View>
+          {/* Only user events (not major- or regional-) can be edited/deleted */}
+          {!ev.id.startsWith('major-') && !ev.id.startsWith('regional-') && (
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity
+                style={styles.editRealBtn}
+                onPress={() => onEdit(ev)}
+              >
+                <Text style={styles.editRealTxt}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteRealBtn}
+                onPress={() => onDelete(ev.id)}
+              >
+                <Text style={styles.deleteRealTxt}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      ))
+    )}
+  </View>
+);
+
+const CulturalBox = ({ title, data }) => (
+  <View style={styles.box}>
+    <Text style={styles.boxTitle}>{title}</Text>
+    {data.length === 0 ? (
+      <Text style={styles.empty}>—</Text>
+    ) : (
+      data.map(o => (
+        <View key={o.name} style={{ marginBottom: 8 }}>
+          <Text style={{ fontWeight: 'bold' }}>{o.name} · {o.date}</Text>
+          <Text style={{ color: '#555' }}>{o.description}</Text>
+        </View>
+      ))
+    )}
+  </View>
+);
+
+const Field = ({ label, ...props }) => (
+  <Fragment>
+    <Text style={styles.label}>{label}</Text>
+    <TextInput style={styles.input} {...props} />
+  </Fragment>
+);
+
+const DateTimeField = ({ label, mode, value, onChange }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <Fragment>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity style={styles.input} onPress={() => setShow(true)}>
+        <Text>{value}</Text>
+      </TouchableOpacity>
+      {show && (
+        <DateTimePicker
+          value={
+            mode === 'date'
+              ? new Date(value)
+              : new Date(`1970-01-01T${value}:00`)
+          }
+          mode={mode}
+          is24Hour
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(_, selected) => {
+            setShow(false);
+            if (!selected) return;
+            onChange(
+              mode === 'date'
+                ? moment(selected).format('YYYY-MM-DD')
+                : moment(selected).format('HH:mm'),
+            );
+          }}
+        />
+      )}
+    </Fragment>
+  );
 };
+
+const ModalBtn = ({ text, gray, red, ...props }) => (
+  <TouchableOpacity
+    style={[
+      styles.modalBtn,
+      gray && { backgroundColor: '#ccc' },
+      red && { backgroundColor: '#ff6b6b' },
+    ]}
+    {...props}>
+    <Text style={styles.modalBtnTxt}>{text}</Text>
+  </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   box: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    margin: 16,
-    elevation: 4,
-  },
-  legend: { flexDirection: 'row', marginTop: 12, flexWrap: 'wrap' },
-  legendRow: { flexDirection: 'row', alignItems: 'center', marginRight: 15, marginBottom: 6 },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 5 },
-  legendLabel: { fontSize: 13, color: '#444' },
-  boxHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    elevation: 3,
   },
   boxTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  addButton: {
+  legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 4 },
+  legendLabel: { fontSize: 13, color: '#444' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  addBtn: {
     backgroundColor: '#00adf5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-  eventItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  eventText: { fontSize: 16, color: '#333', flex: 1 },
-  eventDate: { fontSize: 14, color: '#666', marginTop: 2 },
-  eventActions: { flexDirection: 'row', gap: 8 },
-  editButton: {
+  addTxt: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  empty: { textAlign: 'center', color: '#888', marginVertical: 12 },
+  eventRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 6 },
+  eventTitle: { fontSize: 16, fontWeight: '600' },
+  eventSub: { fontSize: 13, color: '#666' },
+  // Only user-added events get real Edit/Delete buttons
+  editRealBtn: {
     backgroundColor: '#50cebb',
-    paddingHorizontal: 8,
+    borderRadius: 6,
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 4,
+    marginHorizontal: 2,
   },
-  editButtonText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-  deleteButton: {
+  editRealTxt: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  deleteRealBtn: {
     backgroundColor: '#ff6b6b',
-    paddingHorizontal: 8,
+    borderRadius: 6,
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 4,
+    marginHorizontal: 2,
   },
-  deleteButtonText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-  noEventText: {
-    fontSize: 16,
-    fontStyle: 'italic',
-    color: '#888',
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  modalOverlay: {
+  deleteRealTxt: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  warn: { color: '#b36b00', marginBottom: 4 },
+  overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    width: '85%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#333',
-  },
-  inputLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#333' },
-  textInput: {
+  modal: { backgroundColor: '#fff', borderRadius: 12, padding: 20, width: '85%' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
+  label: { fontSize: 15, fontWeight: '600', marginTop: 6 },
+  input: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    padding: 10,
+    marginTop: 4,
     fontSize: 16,
-    color: '#333',
   },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#ddd',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: { color: '#666', fontWeight: 'bold', fontSize: 16 },
-  saveButton: {
-    flex: 1,
-    backgroundColor: '#00adf5',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
+  modalBtn: { flex: 1, borderRadius: 8, padding: 12, marginHorizontal: 4, alignItems: 'center' },
+  modalBtnTxt: { color: '#fff', fontWeight: 'bold' },
 });
-
-export default App;
-
