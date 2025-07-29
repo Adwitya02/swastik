@@ -1,22 +1,9 @@
 import React, {
-  useState,
-  useReducer,
-  useMemo,
-  useEffect,
-  Fragment,
+  useState, useReducer, useMemo, useEffect, useCallback, Fragment,
 } from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
-  Platform,
-  PermissionsAndroid,
+  SafeAreaView, ScrollView, View, Text, StyleSheet, TouchableOpacity,
+  Modal, TextInput, Alert, Platform, PermissionsAndroid,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,27 +12,33 @@ import Geolocation from 'react-native-geolocation-service';
 import moment from 'moment';
 import { MhahPanchang } from 'mhah-panchang';
 
+// JSON catalogues
 import majorFestivalsCatalog from './data/major_festivals.json';
 import culturalObservancesCatalog from './data/cultural_observances.json';
 import regionalFestivalsCatalog from './data/regional_festivals.json';
 
+/* ---------- CONSTANTS ---------- */
 const STORAGE_KEY = 'USER_EVENTS';
 const DEFAULT_LOCATION = { latitude: 28.6139, longitude: 77.2090 };
 
 const FASTING_RULES = [
+  // Each rule adds a `fastKey` so dots can be toggled later
   {
     name: 'Ekadashi',
-    color: '#47B881',
+    color: '#e807c7ff',
+    fastKey: 'EKADASHI',
     matcher: p => p.Tithi?.name?.includes('Ekadashi'),
   },
   {
     name: 'Pradosh',
     color: '#FF8700',
+    fastKey: 'PRADOSH',
     matcher: p => p.Tithi?.name?.includes('Trayodashi'),
   },
   {
     name: 'Shivratri',
     color: '#6B47DC',
+    fastKey: 'SHIVRATRI',
     matcher: p =>
       p.Tithi?.name?.includes('Chaturdashi') &&
       p.Masa === 'Magha' &&
@@ -60,8 +53,11 @@ const isValidLocation = loc =>
   Math.abs(loc.latitude) <= 90 &&
   Math.abs(loc.longitude) <= 180;
 
+/* ---------- HELPERS ---------- */
 const groupRegionalFestivals = () =>
-  regionalFestivalsCatalog.reduce((acc, { state, festival_name, description, staticDate2025 }) => {
+  regionalFestivalsCatalog.reduce((acc, {
+    state, festival_name, description, staticDate2025,
+  }) => {
     if (!acc[state]) acc[state] = [];
     acc[state].push({
       name: festival_name,
@@ -72,16 +68,19 @@ const groupRegionalFestivals = () =>
   }, {});
 
 const getStateFromCoords = async (lat, lon) => {
-  return null; // stub for now. Replace with geocode API later
+  // TODO: plug in your reverse-geocode API
+  return null;
 };
 
 const getFastingMarkings = async (year, month, lat, lon) => {
   const panchang = new MhahPanchang();
   const days = moment({ year, month }).daysInMonth();
   const markings = {};
-  for (let d = 1; d <= days; d++) {
+
+  for (let d = 1; d <= days; d += 1) {
     const date = moment({ year, month, day: d }).toDate();
     const data = panchang.calendar(date, lat, lon);
+
     FASTING_RULES.forEach(rule => {
       if (rule.matcher(data)) {
         const key = moment(date).format('YYYY-MM-DD');
@@ -97,20 +96,17 @@ const getFastingMarkings = async (year, month, lat, lon) => {
 
 const eventsReducer = (state, action) => {
   switch (action.type) {
-    case 'add':
-      return [...state, action.payload];
-    case 'update':
-      return state.map(e => (e.id === action.payload.id ? action.payload : e));
-    case 'delete':
-      return state.filter(e => e.id !== action.payload);
-    case 'set':
-      return action.payload || [];
-    default:
-      return state;
+    case 'add':     return [...state, action.payload];
+    case 'update':  return state.map(e => (e.id === action.payload.id ? action.payload : e));
+    case 'delete':  return state.filter(e => e.id !== action.payload);
+    case 'set':     return action.payload || [];
+    default:        return state;
   }
 };
 
+/* ---------- MAIN COMPONENT ---------- */
 export default function App() {
+  /* ----- STATE ----- */
   const [events, dispatchEvents] = useReducer(eventsReducer, []);
   const [selectedDate, setSelectedDate] = useState(moment().format('YYYY-MM-DD'));
   const [location, setLocation] = useState(null);
@@ -124,17 +120,20 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [form, setForm] = useState({ title: '', date: '', time: '' });
 
-  const regionalFestivalsMap = useMemo(groupRegionalFestivals, []);
+  const [userState, setUserState] = useState('Kerala');
 
+  /* ----- CONSTANT MEMOS ----- */
+  const regionalFestivalsMap = useMemo(groupRegionalFestivals, []);
   const today = useMemo(() => moment().format('YYYY-MM-DD'), []);
 
+  /* ---------- LOCATION EFFECT ---------- */
   useEffect(() => {
     const askPermission = async () => {
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return false;
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
       }
       return true;
     };
@@ -146,19 +145,18 @@ export default function App() {
         return;
       }
       Geolocation.getCurrentPosition(
-        async pos => {
+        pos => {
           setLocation(pos.coords);
           setUsingDefaultLocation(false);
         },
         () => setUsingDefaultLocation(true),
-        { enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000 },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
       );
     };
-
     fetchLocation();
   }, []);
 
-  const [userState, setUserState] = useState('Kerala');
+  /* Reverse-geocode once we have coords */
   useEffect(() => {
     (async () => {
       if (!location) return;
@@ -167,6 +165,7 @@ export default function App() {
     })();
   }, [location]);
 
+  /* ---------- STORAGE SYNC ---------- */
   useEffect(() => {
     (async () => {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -178,6 +177,7 @@ export default function App() {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events));
   }, [events]);
 
+  /* ---------- STATIC CATALOG MEMOS ---------- */
   const majorFestivals = useMemo(
     () =>
       majorFestivalsCatalog.map(f => ({
@@ -188,6 +188,7 @@ export default function App() {
       })),
     [],
   );
+
   const regionalFestivals = useMemo(() => {
     const region = regionalFestivalsMap[userState] || [];
     return region.map(f => ({
@@ -197,18 +198,18 @@ export default function App() {
       date: f.staticDate2025 || '2025-01-01',
     }));
   }, [userState, regionalFestivalsMap]);
+
   const allEvents = useMemo(
     () => [...events, ...majorFestivals, ...regionalFestivals],
     [events, majorFestivals, regionalFestivals],
   );
 
-  // For "events on selected date"
+  /* ---------- FILTERED DATA MEMOS ---------- */
   const selectedEvents = useMemo(
     () => allEvents.filter(e => e.date === selectedDate),
     [allEvents, selectedDate],
   );
 
-  // For 5 upcoming events after today (not after selected date)
   const upcomingEvents = useMemo(
     () =>
       allEvents
@@ -218,13 +219,11 @@ export default function App() {
     [allEvents, today],
   );
 
-  // For "cultural observances on selected date"
   const culturalToday = useMemo(
     () => culturalObservancesCatalog.filter(o => o.date === selectedDate),
     [selectedDate],
   );
 
-  // 5 upcoming cultural observances after today
   const upcomingCultural = useMemo(
     () =>
       culturalObservancesCatalog
@@ -234,26 +233,30 @@ export default function App() {
     [today],
   );
 
-  useEffect(() => {
-    const run = async () => {
-      const loc = isValidLocation(location) ? location : DEFAULT_LOCATION;
-      setPanchangLoading(true);
-      try {
-        const data = new MhahPanchang().calendar(
-          new Date(selectedDate),
-          loc.latitude,
-          loc.longitude,
-        );
-        setPanchang(data);
-      } catch {
-        setPanchang(null);
-      } finally {
-        setPanchangLoading(false);
-      }
-    };
-    run();
-  }, [location, selectedDate]);
+  /* ---------- PANCHANG & FASTING ---------- */
+  const fetchPanchangForDate = useCallback(async (dateStr, loc) => {
+    setPanchangLoading(true);
+    try {
+      const data = new MhahPanchang().calendar(
+        new Date(dateStr),
+        loc.latitude,
+        loc.longitude,
+      );
+      setPanchang(data);
+    } catch {
+      setPanchang(null);
+    } finally {
+      setPanchangLoading(false);
+    }
+  }, []);
 
+  /* Run every time date or location changes */
+  useEffect(() => {
+    const loc = isValidLocation(location) ? location : DEFAULT_LOCATION;
+    fetchPanchangForDate(selectedDate, loc);
+  }, [location, selectedDate, fetchPanchangForDate]);
+
+  /* Month-level fasting dots */
   useEffect(() => {
     (async () => {
       const d = moment(selectedDate);
@@ -268,17 +271,19 @@ export default function App() {
     })();
   }, [location, selectedDate]);
 
+  /* ---------- CALENDAR MARKINGS ---------- */
   const markedDates = useMemo(() => {
     const marks = { ...fastingDots };
     allEvents.forEach(ev => {
       const base = marks[ev.date] || { marked: true, dots: [] };
-      base.dots.push({ color: '#50cebb' });
+      base.dots.push({ color: '#50cebb' }); // event dot
       marks[ev.date] = base;
     });
     marks[selectedDate] = { ...(marks[selectedDate] || {}), selected: true };
     return marks;
   }, [fastingDots, allEvents, selectedDate]);
 
+  /* ---------- CRUD HELPERS ---------- */
   const openAddModal = () => {
     setEditingEvent(null);
     setForm({ title: '', date: selectedDate, time: '12:00' });
@@ -309,9 +314,11 @@ export default function App() {
       },
     ]);
 
+  /* ---------- RENDER ---------- */
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
+        {/* CALENDAR */}
         <View style={styles.box}>
           <Calendar
             markedDates={markedDates}
@@ -326,6 +333,7 @@ export default function App() {
           </View>
         </View>
 
+        {/* PANCHANG */}
         <View style={styles.box}>
           <Text style={styles.boxTitle}>Panchang · {selectedDate}</Text>
           {usingDefaultLocation && (
@@ -346,7 +354,7 @@ export default function App() {
           )}
         </View>
 
-        {/* Show cultural observances for selected date if any */}
+        {/* CULTURAL OBSERVANCE: TODAY */}
         {culturalToday.length > 0 && (
           <View style={styles.box}>
             <Text style={styles.boxTitle}>Cultural Observances · {selectedDate}</Text>
@@ -359,6 +367,7 @@ export default function App() {
           </View>
         )}
 
+        {/* EVENTS BOXES */}
         <EventsBox
           title={
             selectedDate === today
@@ -385,6 +394,7 @@ export default function App() {
         />
       </ScrollView>
 
+      {/* MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.overlay}>
           <View style={styles.modal}>
@@ -430,6 +440,7 @@ export default function App() {
   );
 }
 
+/* ---------- SMALL COMPONENTS ---------- */
 const LegendDot = ({ label, color }) => (
   <View style={styles.legendRow}>
     <View style={[styles.dot, { backgroundColor: color }]} />
@@ -443,6 +454,7 @@ const PItem = ({ label, value }) => (
   </Text>
 );
 
+/* ---------- EVENTS BOXES ---------- */
 const EventsBox = ({ title, events, onAdd, hideAdd, onEdit, onDelete }) => (
   <View style={styles.box}>
     <View style={styles.header}>
@@ -464,7 +476,6 @@ const EventsBox = ({ title, events, onAdd, hideAdd, onEdit, onDelete }) => (
             {ev.time && <Text style={styles.eventSub}>⏰ {ev.time}</Text>}
             {ev.description && <Text style={styles.eventSub}>{ev.description}</Text>}
           </View>
-          {/* Only user events (not major- or regional-) can be edited/deleted */}
           {!ev.id.startsWith('major-') && !ev.id.startsWith('regional-') && (
             <View style={{ flexDirection: 'row' }}>
               <TouchableOpacity
@@ -554,7 +565,7 @@ const ModalBtn = ({ text, gray, red, ...props }) => (
     <Text style={styles.modalBtnTxt}>{text}</Text>
   </TouchableOpacity>
 );
-
+/* ---------- STYLES ---------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   box: {
@@ -582,9 +593,8 @@ const styles = StyleSheet.create({
   eventRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 6 },
   eventTitle: { fontSize: 16, fontWeight: '600' },
   eventSub: { fontSize: 13, color: '#666' },
-  // Only user-added events get real Edit/Delete buttons
   editRealBtn: {
-    backgroundColor: '#50cebb',
+    backgroundColor: '#50ce61ff',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 4,
