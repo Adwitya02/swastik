@@ -1,0 +1,182 @@
+[
+  {
+    "name": "Makar Sankranti",
+    "description": "Sun enters Capricorn, harvest festival",
+    "month": "January",
+    "significance": "Harvest festival, kite flying, marks end of winter",
+    "calculation_needed": "True",
+    "lunar_based": "False",
+    "staticDate2025": "2025-01-14"
+  },
+  {
+    "name": "Vasant Panchami",
+    "description": "Start of spring, Saraswati Puja",
+    "month": "February",
+    "significance": "Goddess Saraswati worship, knowledge and arts",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-01-29"
+  },
+  {
+    "name": "Maha Shivratri",
+    "description": "Great night of Lord Shiva",
+    "month": "February/March",
+    "significance": "Lord Shiva worship, fasting, night vigil",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-02-25"
+  },
+  {
+    "name": "Holi",
+    "description": "Festival of colors",
+    "month": "March",
+    "significance": "Victory of good over evil, spring celebration",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-03-14"
+  },
+  {
+    "name": "Ram Navami",
+    "description": "Birth of Lord Rama",
+    "month": "March/April",
+    "significance": "Rama's birthday, righteousness celebration",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-04-06"
+  },
+  {
+    "name": "Hanuman Jayanti",
+    "description": "Birth of Lord Hanuman",
+    "month": "April",
+    "significance": "Devotion and strength, Hanuman worship",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-04-11"
+  },
+  {
+    "name": "Akshaya Tritiya",
+    "description": "Auspicious day for new beginnings",
+    "month": "April/May",
+    "significance": "Golden day, prosperity, new ventures",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-04-30"
+  },
+  {
+    "name": "Buddha Purnima",
+    "description": "Birth of Lord Buddha",
+    "month": "May",
+    "significance": "Buddhism celebration, peace and enlightenment",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-05-12"
+  },
+  {
+    "name": "Guru Purnima",
+    "description": "Honoring teachers and gurus",
+    "month": "July",
+    "significance": "Teacher worship, knowledge reverence",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-07-11"
+  },
+  {
+    "name": "Raksha Bandhan",
+    "description": "Brother-sister bond celebration",
+    "month": "August",
+    "significance": "Sibling love, protection promise",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-08-09"
+  },
+  {
+    "name": "Krishna Janmashtami",
+    "description": "Birth of Lord Krishna",
+    "month": "August",
+    "significance": "Krishna's birthday, devotion and playfulness",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-08-16"
+  },
+  {
+    "name": "Ganesh Chaturthi",
+    "description": "Birth of Lord Ganesha",
+    "month": "August/September",
+    "significance": "Obstacle remover, new beginnings",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-08-28"
+  },
+  {
+    "name": "Navaratri",
+    "description": "Nine nights for Goddess Durga",
+    "month": "September/October",
+    "significance": "Divine feminine power, victory over evil",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-09-22"
+  },
+  {
+    "name": "Dussehra",
+    "description": "Victory of good over evil",
+    "month": "October",
+    "significance": "Rama's victory over Ravana, good over evil",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-10-02"
+  },
+  {
+    "name": "Karva Chauth",
+    "description": "Married women fast for husbands",
+    "month": "October/November",
+    "significance": "Marital devotion, moon worship",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-10-29"
+  },
+  {
+    "name": "Dhanteras",
+    "description": "Wealth and prosperity day",
+    "month": "October/November",
+    "significance": "Lakshmi worship, wealth acquisition",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-10-18"
+  },
+  {
+    "name": "Diwali",
+    "description": "Festival of lights",
+    "month": "October/November",
+    "significance": "Light over darkness, prosperity, Lakshmi worship",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-10-20"
+  },
+  {
+    "name": "Bhai Dooj",
+    "description": "Brother-sister celebration",
+    "month": "October/November",
+    "significance": "Sibling bond, protection and love",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-10-22"
+  },
+  {
+    "name": "Chhath Puja",
+    "description": "Sun god worship",
+    "month": "October/November",
+    "significance": "Sun worship, gratitude, purification",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-11-07"
+  },
+  {
+    "name": "Kartik Purnima",
+    "description": "Sacred full moon day",
+    "month": "November",
+    "significance": "Holy bathing, lamp lighting, devotion",
+    "calculation_needed": "True",
+    "lunar_based": "True",
+    "staticDate2025": "2025-11-15"
+  }
+]
